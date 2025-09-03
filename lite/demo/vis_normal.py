@@ -21,6 +21,7 @@ from adhoc_image_dataset import AdhocImageDataset
 from tqdm import tqdm
 
 from worker_pool import WorkerPool
+import pdb
 
 torchvision.disable_beta_transforms_warning()
 
@@ -83,12 +84,39 @@ def img_save_and_viz(image, result, output_path, seg_dir):
     normal_map_normalized = normal_map / (normal_map_norm + 1e-5)  # Add a small e
     np.save(output_file, normal_map_normalized)
 
-    normal_map_normalized[mask == 0] = -1  ## visualize background (nan) as black
-    normal_map = ((normal_map_normalized + 1) / 2 * 255).astype(np.uint8)
-    normal_map = normal_map[:, :, ::-1]
+    # ====== SMOOTH THEN RENORMALIZE ======
+    # Apply per-channel Gaussian smoothing on the *unnormalized* field
+    # (this suppresses checkerboard best), then re-normalize to unit length.
+    n0 = cv2.GaussianBlur(normal_map[..., 0].astype(np.float32), (5, 5), 1.2,
+                          borderType=cv2.BORDER_REFLECT101)
+    n1 = cv2.GaussianBlur(normal_map[..., 1].astype(np.float32), (5, 5), 1.2,
+                          borderType=cv2.BORDER_REFLECT101)
+    n2 = cv2.GaussianBlur(normal_map[..., 2].astype(np.float32), (5, 5), 1.2,
+                          borderType=cv2.BORDER_REFLECT101)
+    normal_map_smooth = np.stack([n0, n1, n2], axis=-1)
 
-    vis_image = np.concatenate([image, normal_map], axis=1)
+    normal_map_smooth_norm = np.linalg.norm(normal_map_smooth, axis=-1, keepdims=True)
+    normal_map_normalized_vis = normal_map_smooth / (normal_map_smooth_norm + 1e-5)
+
+    # background as (-1,-1,-1) so it shows black after mapping
+    normal_map_normalized_vis[~mask] = -1
+
+    # to 0..255, RGB -> BGR for cv2
+    normal_vis = ((normal_map_normalized_vis + 1) / 2 * 255).astype(np.uint8)
+    normal_vis = normal_vis[:, :, ::-1]
+
+    vis_image = np.concatenate([image, normal_vis], axis=1)
     cv2.imwrite(output_path, vis_image)
+
+    
+    # ====== ORIGINAL (no smoothing) ======
+    # normal_map_normalized[mask == 0] = -1  ## visualize background (nan) as black
+    # normal_map = ((normal_map_normalized + 1) / 2 * 255).astype(np.uint8)
+    # normal_map = normal_map[:, :, ::-1]
+
+    # vis_image = np.concatenate([image, normal_map], axis=1)
+    # cv2.imwrite(output_path, vis_image)
+    
 
 def load_model(checkpoint, use_torchscript=False):
     if use_torchscript:

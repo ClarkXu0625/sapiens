@@ -75,6 +75,13 @@ def img_save_and_viz(image, result, output_path, seg_dir):
     ).squeeze(0)
 
     depth_map = seg_logits.data.float().numpy()[0]  ## H x W
+
+    # === ADDED, light Gaussian smoothing to kill checkerboard for viz ===
+    depth_map_vis = cv2.GaussianBlur(
+        depth_map.astype(np.float32), (5, 5), sigmaX=1.2, borderType=cv2.BORDER_REFLECT101
+    )
+    # ===================================================================
+
     image_name = os.path.basename(output_path)
 
     mask_path = os.path.join(
@@ -92,6 +99,10 @@ def img_save_and_viz(image, result, output_path, seg_dir):
         .replace(".jpeg", ".npy")
     )
     np.save(save_path, depth_map)
+
+    # ========== new ==========
+    depth_map = depth_map_vis
+    # ==========================
 
     depth_map[~mask] = np.nan
     depth_foreground = depth_map[mask]  ## value in range [0, 1]
