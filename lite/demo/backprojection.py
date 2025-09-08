@@ -134,7 +134,7 @@ def main():
     H, W = depth_rel.shape
     print(f"[Depth] shape={depth_rel.shape}, finite={np.isfinite(depth_rel).sum()}/{depth_rel.size}")
 
-    # Load+align mask (if any)
+    # align mask
     mask = None
     if args.mask_npy and os.path.exists(args.mask_npy):
         mask = np.load(args.mask_npy)
@@ -161,7 +161,7 @@ def main():
     pts, valid_mask = backproject_to_camera(Z, K)
     print(f"[Points] {pts.shape[0]} valid points")
 
-    # Colors (optional)
+    # Colors 
     colors = extract_colors(args.rgb, target_shape=(H, W), valid_mask_flat=valid_mask.reshape(-1))
 
     # Open3D PCD
@@ -170,11 +170,9 @@ def main():
     if colors is not None:
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    # Optional down-sampling
     if args.voxel_down_m and args.voxel_down_m > 0:
         pcd = pcd.voxel_down_sample(args.voxel_down_m)
 
-    # Ensure output dir exists
     os.makedirs(os.path.dirname(args.ply_out), exist_ok=True)
 
     ok = o3d.io.write_point_cloud(args.ply_out, pcd,
